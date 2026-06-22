@@ -494,11 +494,18 @@ app.post('/api/telegram/webhook', async (req, res) => {
   try {
     const update = req.body;
 
-    // Chat discovery
+    // Chat discovery + inbox
     if (update.message) {
       const chat = update.message.chat;
       const from = update.message.from;
-      console.log(`\n🟢 NEW CHAT DETECTED\n   chat.id: ${chat.id}\n   chat.title: ${chat.title||chat.first_name||'—'}\n   chat.type: ${chat.type}\n   message.text: "${update.message.text||''}"\n   from.username: @${from?.username||from?.first_name||'—'}\n`);
+      const text = update.message.text || '';
+      console.log(`\n🟢 NEW CHAT DETECTED\n   chat.id: ${chat.id}\n   chat.title: ${chat.title||chat.first_name||'—'}\n   chat.type: ${chat.type}\n   message.text: "${text}"\n   from.username: @${from?.username||from?.first_name||'—'}\n`);
+
+      // Save ALL messages to inbox for MiMoCode processing
+      if (text) {
+        const sender = from ? (from.username ? `@${from.username}` : from.first_name || 'user') : 'unknown';
+        addToInbox(sender, text);
+      }
     }
 
     if (!update.callback_query) return;
@@ -577,6 +584,53 @@ app.post('/api/vk/callback', async (req, res) => {
   }
 
   res.send('ok');
+});
+
+// =============================================
+// Inbox: Telegram → MiMoCode
+// =============================================
+const INBOX_FILE = path.join(__dirname, 'logs', 'inbox.json');
+
+function loadInbox() {
+  try { if (fs.existsSync(INBOX_FILE)) return JSON.parse(fs.readFileSync(INBOX_FILE, 'utf-8')); } catch(e) {}
+  return [];
+}
+
+function saveInbox(items) {
+  try {
+    const d = path.join(__dirname, 'logs');
+    if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
+    fs.writeFileSync(INBOX_FILE, JSON.stringify(items, null, 2));
+  } catch(e) {}
+}
+
+function addToInbox(from, text) {
+  const items = loadInbox();
+  items.push({ from, text, date: new Date().toISOString(), processed: false });
+  saveInbox(items);
+  console.log(`📩 INBOX: ${from}: ${text}`);
+}
+
+// Store inbox messages from webhook
+// (handled in webhook handler below)
+
+app.get('/api/inbox', (req, res) => {
+  const items = loadInbox().filter(i => !i.processed);
+  res.json({ messages: items, count: items.length });
+});
+
+app.get('/api/inbox/all', (req, res) => {
+  res.json({ messages: loadInbox() });
+});
+
+app.post('/api/inbox/process', (req, res) => {
+  const { indices } = req.body;
+  const items = loadInbox();
+  if (indices && Array.isArray(indices)) {
+    for (const i of indices) { if (items[i]) items[i].processed = true; }
+  }
+  saveInbox(items);
+  res.json({ ok: true });
 });
 
 // =============================================

@@ -56,10 +56,12 @@ npm start
 
 1. Push code to GitHub
 2. Go to [render.com](https://render.com)
-3. Create new Web Service
+3. Create new Web Service from `aztmn72/zaya` repo
 4. Set build command: `cd api && npm install`
 5. Set start command: `cd api && npm start`
-6. Add environment variables
+6. Add environment variables:
+   - `TELEGRAM_BOT_TOKEN` = your bot token
+   - `TELEGRAM_CHAT_ID` = your chat ID
 7. Deploy
 
 ## Deploy to Vercel
@@ -83,7 +85,7 @@ Submit a new lead.
   "email": "ivan@example.com",
   "topic": "Предзаказ",
   "message": "Хочу купить контроллер",
-  "source": "https://zaya.gitverse.site"
+  "source": "https://aztmn72.github.io/website/"
 }
 ```
 
@@ -112,6 +114,6 @@ Health check endpoint.
 💬 Сообщение: Хочу купить контроллер
 
 ━━━━━━━━━━━━━━━━━━
-🔗 Источник: https://zaya.gitverse.site
+🔗 Источник: https://aztmn72.github.io/website/
 🕐 Дата: 18.06.2026, 12:00:00
 ```

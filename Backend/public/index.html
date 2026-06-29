@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ZAYA</title>
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="icon" href="/icon.svg">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <div class="shell">
+      <header class="topbar">
+        <div class="brand">
+          <img src="/icon.svg" alt="">
+          <div>
+            <strong>ZAYA</strong>
+            <span>Умный полив и освещение</span>
+          </div>
+        </div>
+        <nav class="tabs" aria-label="Основная навигация">
+          <button class="tab active" data-view="dashboard">Кабинет</button>
+          <button class="tab" data-view="demo">Демо</button>
+          <button class="tab admin-only hidden" data-view="admin">Админ</button>
+        </nav>
+      </header>
+
+      <main>
+        <section id="auth-view" class="panel auth-panel">
+          <div class="auth-copy">
+            <h1>ZAYA кабинет</h1>
+            <p>Бесплатный пилотный backend: аккаунты, устройства, 4 бесплатные зоны и админские гранты без платной инфраструктуры.</p>
+          </div>
+          <form id="auth-form" class="auth-form">
+            <div class="segmented">
+              <button type="button" class="active" data-auth-mode="login">Вход</button>
+              <button type="button" data-auth-mode="register">Регистрация</button>
+            </div>
+            <label class="register-field hidden">
+              Имя
+              <input name="name" autocomplete="name" placeholder="Александр">
+            </label>
+            <label>
+              Email
+              <input name="email" type="email" autocomplete="email" required placeholder="you@example.com">
+            </label>
+            <label>
+              Пароль
+              <input name="password" type="password" autocomplete="current-password" required minlength="6" placeholder="Минимум 6 символов">
+            </label>
+            <button class="primary" type="submit">Продолжить</button>
+            <p id="auth-message" class="message"></p>
+          </form>
+        </section>
+
+        <section id="dashboard-view" class="view hidden">
+          <div class="toolbar">
+            <div>
+              <h2>Кабинет</h2>
+              <p id="account-line">Загрузка...</p>
+            </div>
+            <button id="logout-button" class="ghost">Выйти</button>
+          </div>
+
+          <div class="grid two">
+            <section class="panel">
+              <h3>Добавить ESP32</h3>
+              <form id="claim-form" class="stack">
+                <label>
+                  Название
+                  <input name="name" placeholder="Теплица">
+                </label>
+                <label>
+                  Код с устройства
+                  <input name="pairingCode" placeholder="ZAYA-XXXXXX" required>
+                </label>
+                <label>
+                  Device ID
+                  <input name="localDeviceId" placeholder="zaya-XXXXXX">
+                </label>
+                <button class="primary" type="submit">Привязать</button>
+                <p id="claim-message" class="message"></p>
+              </form>
+            </section>
+
+            <section class="panel">
+              <h3>Подписка</h3>
+              <div class="metric-row">
+                <div>
+                  <span>План</span>
+                  <strong id="plan-name">Free</strong>
+                </div>
+                <div>
+                  <span>Доступно зон</span>
+                  <strong id="zone-limit">4</strong>
+                </div>
+              </div>
+              <p class="muted">Стартовый план открывает 4 зоны. Админ может выдать Plus, Pro или Founder бесплатно выбранным аккаунтам.</p>
+            </section>
+          </div>
+
+          <section class="panel">
+            <div class="section-head">
+              <h3>Мои устройства</h3>
+              <button id="refresh-devices" class="ghost">Обновить</button>
+            </div>
+            <div id="devices-list" class="cards"></div>
+          </section>
+        </section>
+
+        <section id="demo-view" class="view hidden">
+          <div class="toolbar">
+            <div>
+              <h2>Демо ZAYA</h2>
+              <p>Так пользователь видит возможности до покупки устройства.</p>
+            </div>
+          </div>
+          <div class="grid four demo-grid">
+            <article class="panel stat">
+              <span>Температура</span>
+              <strong>24°C</strong>
+              <small>Воздух в норме</small>
+            </article>
+            <article class="panel stat">
+              <span>Влажность</span>
+              <strong>58%</strong>
+              <small>DHT/SHT датчик</small>
+            </article>
+            <article class="panel stat">
+              <span>Полив</span>
+              <strong>4 / 16</strong>
+              <small>Free план</small>
+            </article>
+            <article class="panel stat">
+              <span>Свет</span>
+              <strong>Включён</strong>
+              <small>3 группы</small>
+            </article>
+          </div>
+          <section class="panel">
+            <h3>Демо-зоны</h3>
+            <div class="zone-board" id="demo-zones"></div>
+          </section>
+        </section>
+
+        <section id="admin-view" class="view hidden">
+          <div class="toolbar">
+            <div>
+              <h2>Админ</h2>
+              <p>Пользователи, устройства, онлайн-статус и бесплатные подписки.</p>
+            </div>
+            <button id="refresh-admin" class="ghost">Обновить</button>
+          </div>
+          <div class="grid two">
+            <section class="panel">
+              <h3>Пользователи</h3>
+              <div id="admin-users" class="admin-list"></div>
+            </section>
+            <section class="panel">
+              <h3>Устройства</h3>
+              <div id="admin-devices" class="admin-list"></div>
+            </section>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

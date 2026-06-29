@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: zaya-backend
+    runtime: node
+    plan: free
+    rootDir: Backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: ZAYA_SESSION_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false

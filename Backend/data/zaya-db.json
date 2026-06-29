@@ -1,0 +1,31 @@
+{
+  "users": [
+    {
+      "id": "5cf6dae6-9a32-4e96-817c-199eb35670d1",
+      "name": "Александр",
+      "email": "aztmn@mail.ru",
+      "passwordHash": "f0999152f0effab475bee734feb07457:ccf9b978b3227f19355c26c6b6307d04c8b90748792a0e7fead3e83bb8e4d777",
+      "role": "admin",
+      "plan": "founder",
+      "zoneLimit": 16,
+      "subscriptionExpiresAt": null,
+      "createdAt": "2026-06-29T09:57:28.808Z"
+    },
+    {
+      "id": "d54251bf-cd5b-458c-aca0-d7aeb810f24e",
+      "name": "Александр1",
+      "email": "avgtmn@mail.ru",
+      "passwordHash": "09ce64bcc8b70ec992e042e719c4d00d:d4717228095d4b19882e98e8f190991f080954a20ca7247098c85d0f7eb94a03",
+      "role": "owner",
+      "plan": "plus",
+      "zoneLimit": 8,
+      "subscriptionExpiresAt": null,
+      "createdAt": "2026-06-29T09:58:42.037Z",
+      "grantNote": "manual admin grant"
+    }
+  ],
+  "devices": [],
+  "commands": [],
+  "events": [],
+  "createdAt": "2026-06-29T09:57:28.776Z"
+}

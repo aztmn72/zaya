@@ -1,6 +1,0 @@
-node_modules/
-data/zaya.db
-data/zaya.db-wal
-data/zaya.db-shm
-logs/
-.DS_Store

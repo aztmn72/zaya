@@ -577,19 +577,6 @@ async function api(req, res, pathname) {
   }
 
   // =============================================
-  // Debug: check env vars (remove after testing)
-  // =============================================
-  if (routeKey(req.method, pathname) === "GET /api/debug/env") {
-    return send(res, 200, {
-      TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN ? "SET (length=" + process.env.TELEGRAM_BOT_TOKEN.length + ")" : "MISSING",
-      TELEGRAM_CHAT_ID: process.env.TELEGRAM_CHAT_ID ? "SET (" + process.env.TELEGRAM_CHAT_ID + ")" : "MISSING",
-      VK_TOKEN: process.env.VK_TOKEN ? "SET (length=" + process.env.VK_TOKEN.length + ")" : "MISSING",
-      VK_USER_ID: process.env.VK_USER_ID ? "SET (" + process.env.VK_USER_ID + ")" : "MISSING",
-      DATABASE_URL: process.env.DATABASE_URL ? "SET" : "MISSING"
-    });
-  }
-
-  // =============================================
   // Telegram Webhook
   // =============================================
   if (routeKey(req.method, pathname) === "POST /api/telegram/webhook") {

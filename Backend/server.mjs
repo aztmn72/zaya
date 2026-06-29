@@ -530,52 +530,55 @@ async function api(req, res, pathname) {
     db.leads.push(lead);
     await saveDb(db);
 
-    // Respond immediately — notifications are async
+    // Respond immediately
     send(res, 200, { success: true, lead_id });
 
-    // Build Telegram/VK message (fire-and-forget, does NOT block response)
-    const SEP = "────────────────";
-    let tgMsg = `\u{1F525} \u041D\u041E\u0412\u0410\u042F \u0417\u0410\u042F\u0412\u041A\u0410\n\n\u2116 ${lead_id}\n\n\u{1F464} ${name}\n\u{1F4F1} ${normalizedPhone}\n\u{1F4E7} ${email || "\u041D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D"}\n\n\u{1F4CB} \u0418\u043D\u0442\u0435\u0440\u0435\u0441:\n${topic || "\u041D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D\u0430"}\n\n\u{1F4AC} \u0421\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0435:\n${message || "\u0411\u0435\u0437 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044F"}`;
-    tgMsg += `\n\n${SEP}\n\n\u{1F4F1} ${device_type || "\u2014"}\n\u{1F4BB} ${os || "\u2014"}\n\u{1F310} ${browser || "\u2014"}`;
-    tgMsg += `\n\n\u23F1 \u041D\u0430 \u0441\u0430\u0439\u0442\u0435: ${time_on_page || 0} \u0441\u0435\u043A`;
-    if (visit_count > 1) tgMsg += `\n\u{1F504} \u0412\u0438\u0437\u0438\u0442\u043E\u0432: ${visit_count}`;
-    if (utm_source) tgMsg += `\n\n\u{1F4E2} UTM: ${utm_source}`;
-    tgMsg += `\n\n\u{1F4C5} ${new Date().toLocaleString("ru-RU", { timeZone: "Asia/Yekaterinburg" })}`;
+    // Fire-and-forget notifications (does NOT block response)
+    (async () => {
+      try {
+        const SEP = "────────────────";
+        let tgMsg = `НОВАЯ ЗАЯВКА\n\n№ ${lead_id}\n\n👤 ${name}\n📱 ${normalizedPhone}\n📧 ${email || "Не указан"}\n\n📋 Интерес:\n${topic || "Не указана"}\n\n💬 Сообщение:\n${message || "Без сообщения"}`;
+        tgMsg += `\n\n${SEP}\n\n📱 ${device_type || "—"}\n💻 ${os || "—"}\n🌐 ${browser || "—"}`;
+        tgMsg += `\n\n⏱ На сайте: ${time_on_page || 0} сек`;
+        if (visit_count > 1) tgMsg += `\n🔄 Визитов: ${visit_count}`;
+        if (utm_source) tgMsg += `\n\n📢 UTM: ${utm_source}`;
+        tgMsg += `\n\n📅 ${new Date().toLocaleString("ru-RU", { timeZone: "Asia/Yekaterinburg" })}`;
 
-    // Fire-and-forget: Telegram
-    const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-    const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
-    console.log(`[TG] send start for ${lead_id} | token=${TELEGRAM_BOT_TOKEN ? "SET(len=" + TELEGRAM_BOT_TOKEN.length + ")" : "MISSING"} | chatId=${TELEGRAM_CHAT_ID || "MISSING"}`);
-    if (TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID) {
-      fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: tgMsg })
-      }).then(r => { console.log(`[TG] HTTP ${r.status}`); return r.json(); }).then(d => {
-        if (d.ok) console.log(`[TG] SUCCESS message_id=${d.result?.message_id}`);
-        else console.error(`[TG] API ERROR:`, JSON.stringify(d));
-      }).catch(e => console.error(`[TG] FETCH ERROR:`, e));
-    } else {
-      console.log(`[TG] SKIPPED — not configured`);
-    }
+        // Telegram
+        const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+        const TG_CHAT = process.env.TELEGRAM_CHAT_ID;
+        console.log(`[TG] send start | token=${TG_TOKEN ? "SET(len=" + TG_TOKEN.length + ")" : "MISSING"} | chatId=${TG_CHAT || "MISSING"}`);
+        if (TG_TOKEN && TG_CHAT) {
+          const r = await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ chat_id: TG_CHAT, text: tgMsg })
+          });
+          const d = await r.json();
+          if (d.ok) console.log(`[TG] SUCCESS message_id=${d.result?.message_id}`);
+          else console.error(`[TG] API ERROR:`, JSON.stringify(d));
+        } else { console.log(`[TG] SKIPPED — not configured`); }
 
-    // Fire-and-forget: VK
-    const VK_TOKEN = process.env.VK_TOKEN;
-    const VK_USER_ID = process.env.VK_USER_ID;
-    console.log(`[VK] send start for ${lead_id} | token=${VK_TOKEN ? "SET(len=" + VK_TOKEN.length + ")" : "MISSING"} | userId=${VK_USER_ID || "MISSING"}`);
-    if (VK_TOKEN && VK_USER_ID) {
-      const vkBody = new URLSearchParams({ access_token: VK_TOKEN, v: "5.199", user_id: VK_USER_ID, message: tgMsg, random_id: String(Date.now()) });
-      fetch("https://api.vk.com/method/messages.send", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: vkBody.toString()
-      }).then(r => { console.log(`[VK] HTTP ${r.status}`); return r.json(); }).then(d => {
-        if (d.response) console.log(`[VK] SUCCESS message_id=${d.response}`);
-        else console.error(`[VK] API ERROR:`, JSON.stringify(d));
-      }).catch(e => console.error(`[VK] FETCH ERROR:`, e));
-    } else {
-      console.log(`[VK] SKIPPED — not configured`);
-    }
+        // VK
+        const VK_T = process.env.VK_TOKEN;
+        const VK_U = process.env.VK_USER_ID;
+        let vkUid = VK_U || "";
+        const urlM = vkUid.match(/club(\d+)/);
+        if (urlM) vkUid = "-" + urlM[1];
+        else if (!/^-?\d+$/.test(vkUid)) vkUid = "";
+        console.log(`[VK] send start | token=${VK_T ? "SET(len=" + VK_T.length + ")" : "MISSING"} | userId=${vkUid || "MISSING"}`);
+        if (VK_T && vkUid) {
+          const vkBody = new URLSearchParams({ access_token: VK_T, v: "5.199", user_id: vkUid, message: tgMsg, random_id: String(Date.now()) });
+          const r = await fetch("https://api.vk.com/method/messages.send", {
+            method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: vkBody.toString()
+          });
+          const d = await r.json();
+          if (d.response) console.log(`[VK] SUCCESS message_id=${d.response}`);
+          else console.error(`[VK] API ERROR:`, JSON.stringify(d));
+        } else { console.log(`[VK] SKIPPED — not configured`); }
+      } catch (e) { console.error("[NOTIFY ERROR]", e); }
+    })();
+
   }
 
   // =============================================
@@ -610,21 +613,20 @@ async function api(req, res, pathname) {
     // Test VK
     const VK_T = process.env.VK_TOKEN;
     const VK_U = process.env.VK_USER_ID;
-    console.log(`[TEST] VK: token=${VK_T ? "SET(len=" + VK_T.length + ")" : "MISSING"} userId=${VK_U || "MISSING"}`);
-    if (VK_T && VK_U) {
-      try {
-        const vkBody = new URLSearchParams({ access_token: VK_T, v: "5.199", user_id: VK_U, message: testMsg, random_id: String(Date.now()) });
-        const r = await fetch("https://api.vk.com/method/messages.send", {
-          method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: vkBody.toString()
-        });
-        const d = await r.json();
-        results.vk = d.response ? { success: true, message_id: d.response } : { success: false, error: d };
-        console.log(`[TEST] VK result:`, JSON.stringify(results.vk));
-      } catch (e) {
-        results.vk = { success: false, error: e.message, stack: e.stack };
-        console.error(`[TEST] VK error:`, e);
-      }
+    let vkUid = VK_U || "";
+    const vkUrlMatch = vkUid.match(/club(\d+)/);
+    if (vkUrlMatch) vkUid = "-" + vkUrlMatch[1];
+    else if (!/^-?\d+$/.test(vkUid)) vkUid = "";
+    console.log(`[TEST] VK: token=${VK_T ? "SET(len=" + VK_T.length + ")" : "MISSING"} userId=${vkUid || "MISSING"} raw=${VK_U || "MISSING"}`);
+    if (VK_T && vkUid) {
+      const vkBody = new URLSearchParams({ access_token: VK_T, v: "5.199", user_id: vkUid, message: testMsg, random_id: String(Date.now()) });
+      const r = await fetch("https://api.vk.com/method/messages.send", {
+        method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: vkBody.toString()
+      });
+      const d = await r.json();
+      results.vk = d.response ? { success: true, message_id: d.response } : { success: false, error: d };
+      console.log(`[TEST] VK result:`, JSON.stringify(results.vk));
     } else {
       results.vk = { success: false, reason: "not_configured", token: !!VK_T, userId: !!VK_U };
       console.log(`[TEST] VK: not configured`);

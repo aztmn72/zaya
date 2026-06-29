@@ -619,6 +619,7 @@ async function serveStatic(req, res, pathname) {
 function setCorsHeaders(req, res) {
   const origin = req.headers.origin || "";
   const allowedOrigins = [
+    "https://zayahome.onrender.com",
     "https://aztmn72.github.io",
     "https://zaya-gitverse.site",
     "http://localhost:8787",

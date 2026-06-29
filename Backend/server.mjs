@@ -545,35 +545,92 @@ async function api(req, res, pathname) {
     // Fire-and-forget: Telegram
     const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
     const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+    console.log(`[TG] send start for ${lead_id} | token=${TELEGRAM_BOT_TOKEN ? "SET(len=" + TELEGRAM_BOT_TOKEN.length + ")" : "MISSING"} | chatId=${TELEGRAM_CHAT_ID || "MISSING"}`);
     if (TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID) {
       fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: tgMsg })
-      }).then(r => r.json()).then(d => {
-        if (d.ok) console.log(`\u2705 Telegram sent for ${lead_id}`);
-        else console.error(`\u274C Telegram: ${d.description}`);
-      }).catch(e => console.error(`\u274C Telegram: ${e.message}`));
+      }).then(r => { console.log(`[TG] HTTP ${r.status}`); return r.json(); }).then(d => {
+        if (d.ok) console.log(`[TG] SUCCESS message_id=${d.result?.message_id}`);
+        else console.error(`[TG] API ERROR:`, JSON.stringify(d));
+      }).catch(e => console.error(`[TG] FETCH ERROR:`, e));
     } else {
-      console.log(`\u26A0\uFE0F Telegram not configured`);
+      console.log(`[TG] SKIPPED — not configured`);
     }
 
     // Fire-and-forget: VK
     const VK_TOKEN = process.env.VK_TOKEN;
     const VK_USER_ID = process.env.VK_USER_ID;
+    console.log(`[VK] send start for ${lead_id} | token=${VK_TOKEN ? "SET(len=" + VK_TOKEN.length + ")" : "MISSING"} | userId=${VK_USER_ID || "MISSING"}`);
     if (VK_TOKEN && VK_USER_ID) {
       const vkBody = new URLSearchParams({ access_token: VK_TOKEN, v: "5.199", user_id: VK_USER_ID, message: tgMsg, random_id: String(Date.now()) });
       fetch("https://api.vk.com/method/messages.send", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: vkBody.toString()
-      }).then(r => r.json()).then(d => {
-        if (d.response) console.log(`\u2705 VK sent for ${lead_id}`);
-        else console.error(`\u274C VK: ${d.error?.error_msg}`);
-      }).catch(e => console.error(`\u274C VK: ${e.message}`));
+      }).then(r => { console.log(`[VK] HTTP ${r.status}`); return r.json(); }).then(d => {
+        if (d.response) console.log(`[VK] SUCCESS message_id=${d.response}`);
+        else console.error(`[VK] API ERROR:`, JSON.stringify(d));
+      }).catch(e => console.error(`[VK] FETCH ERROR:`, e));
     } else {
-      console.log(`\u26A0\uFE0F VK not configured`);
+      console.log(`[VK] SKIPPED — not configured`);
     }
+  }
+
+  // =============================================
+  // Test notifications endpoint (temporary)
+  // =============================================
+  if (routeKey(req.method, pathname) === "GET /api/test-notifications") {
+    const results = { telegram: null, vk: null };
+    const testMsg = `TEST NOTIFICATION\n\nThis is a test from ZAYA Backend.\nTime: ${new Date().toLocaleString("ru-RU", { timeZone: "Asia/Yekaterinburg" })}`;
+
+    // Test Telegram
+    const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+    const TG_CHAT = process.env.TELEGRAM_CHAT_ID;
+    console.log(`[TEST] Telegram: token=${TG_TOKEN ? "SET(len=" + TG_TOKEN.length + ")" : "MISSING"} chatId=${TG_CHAT || "MISSING"}`);
+    if (TG_TOKEN && TG_CHAT) {
+      try {
+        const r = await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chat_id: TG_CHAT, text: testMsg })
+        });
+        const d = await r.json();
+        results.telegram = d.ok ? { success: true, message_id: d.result?.message_id } : { success: false, error: d };
+        console.log(`[TEST] Telegram result:`, JSON.stringify(results.telegram));
+      } catch (e) {
+        results.telegram = { success: false, error: e.message, stack: e.stack };
+        console.error(`[TEST] Telegram error:`, e);
+      }
+    } else {
+      results.telegram = { success: false, reason: "not_configured", token: !!TG_TOKEN, chatId: !!TG_CHAT };
+      console.log(`[TEST] Telegram: not configured`);
+    }
+
+    // Test VK
+    const VK_T = process.env.VK_TOKEN;
+    const VK_U = process.env.VK_USER_ID;
+    console.log(`[TEST] VK: token=${VK_T ? "SET(len=" + VK_T.length + ")" : "MISSING"} userId=${VK_U || "MISSING"}`);
+    if (VK_T && VK_U) {
+      try {
+        const vkBody = new URLSearchParams({ access_token: VK_T, v: "5.199", user_id: VK_U, message: testMsg, random_id: String(Date.now()) });
+        const r = await fetch("https://api.vk.com/method/messages.send", {
+          method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: vkBody.toString()
+        });
+        const d = await r.json();
+        results.vk = d.response ? { success: true, message_id: d.response } : { success: false, error: d };
+        console.log(`[TEST] VK result:`, JSON.stringify(results.vk));
+      } catch (e) {
+        results.vk = { success: false, error: e.message, stack: e.stack };
+        console.error(`[TEST] VK error:`, e);
+      }
+    } else {
+      results.vk = { success: false, reason: "not_configured", token: !!VK_T, userId: !!VK_U };
+      console.log(`[TEST] VK: not configured`);
+    }
+
+    return send(res, 200, results);
   }
 
   // =============================================

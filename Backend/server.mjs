@@ -625,8 +625,31 @@ async function serveStatic(req, res, pathname) {
   }
 }
 
+function setCorsHeaders(req, res) {
+  const origin = req.headers.origin || "";
+  const allowedOrigins = [
+    "https://aztmn72.github.io",
+    "https://zaya-gitverse.site",
+    "http://localhost:8787",
+    "http://localhost:3000"
+  ];
+  const allowed = allowedOrigins.some(o => origin.startsWith(o)) ? origin : allowedOrigins[0];
+  res.setHeader("Access-Control-Allow-Origin", allowed);
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-ZAYA-Device-Secret");
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  res.setHeader("Access-Control-Max-Age", "86400");
+}
+
 createServer(async (req, res) => {
   try {
+    setCorsHeaders(req, res);
+
+    if (req.method === "OPTIONS") {
+      res.writeHead(204);
+      return res.end();
+    }
+
     const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
     if (url.pathname.startsWith("/api/")) {
       await api(req, res, url.pathname);

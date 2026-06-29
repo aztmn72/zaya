@@ -107,6 +107,7 @@ function emptyDb() {
     devices: [],
     commands: [],
     events: [],
+    leads: [],
     createdAt: nowIso()
   };
 }
@@ -481,6 +482,126 @@ async function api(req, res, pathname) {
     }
     await saveDb(db);
     return send(res, 200, { ok: true, user: publicUser(user) });
+  }
+
+  // =============================================
+  // LEAD API
+  // =============================================
+  if (routeKey(req.method, pathname) === "POST /api/lead") {
+    const body = await readJson(req);
+
+    // Honeypot check
+    if (body.website && body.website.trim() !== "") return send(res, 200, { success: true });
+
+    // Honeypot: form submitted too fast (< 3 seconds) = bot
+    if (body.form_ts) {
+      const ts = parseInt(body.form_ts);
+      if (!isNaN(ts) && (Date.now() - ts) < 3000) return send(res, 200, { success: true });
+    }
+
+    const { name, phone, email, topic, message, source, device_type, os, browser, user_agent, utm_source, utm_medium, utm_campaign, utm_content, utm_term, referer, current_url, time_on_page, viewed_controller4, browser_tz, visit_count, pages_viewed } = body;
+
+    if (!name || !phone) return sendError(res, 400, "name_and_phone_required");
+
+    // Normalize phone
+    let normalizedPhone = String(phone || "").trim();
+    let phoneDigits = normalizedPhone.replace(/\D/g, "");
+    if (phoneDigits.startsWith("8") && phoneDigits.length <= 11) phoneDigits = "7" + phoneDigits.slice(1);
+    if (phoneDigits.length === 11 && phoneDigits.startsWith("7")) normalizedPhone = "+7 " + phoneDigits.slice(1, 4) + " " + phoneDigits.slice(4, 7) + "-" + phoneDigits.slice(7, 9) + "-" + phoneDigits.slice(9, 11);
+
+    // Lead number
+    if (!db.leads) db.leads = [];
+    const leadNumber = db.leads.length + 1;
+    const lead_id = `ZAYA-${String(leadNumber).padStart(6, "0")}`;
+
+    console.log(`📥 New lead: #${leadNumber} ${name} (${normalizedPhone})`);
+
+    const lead = {
+      lead_id, name, phone: normalizedPhone, email: email || "", topic: topic || "",
+      message: message || "", source: source || "zaya-website",
+      device_type: device_type || "", os: os || "", browser: browser || "",
+      utm_source: utm_source || "", utm_medium: utm_medium || "", utm_campaign: utm_campaign || "",
+      utm_content: utm_content || "", utm_term: utm_term || "",
+      referer: referer || "", current_url: current_url || "",
+      time_on_page: time_on_page || 0, viewed_controller4: viewed_controller4 || false,
+      browser_tz: browser_tz || "", visit_count: visit_count || 1,
+      created_at: nowIso()
+    };
+    db.leads.push(lead);
+    await saveDb(db);
+
+    // Build Telegram message
+    const SEP = "────────────────";
+    let tgMsg = `🔥 НОВАЯ ЗАЯВКА\n\n№ ${lead_id}\n\n👤 ${name}\n📱 ${normalizedPhone}\n📧 ${email || "Не указан"}\n\n📋 Интерес:\n${topic || "Не указана"}\n\n💬 Сообщение:\n${message || "Без сообщения"}`;
+    tgMsg += `\n\n${SEP}\n\n📱 ${device_type || "—"}\n💻 ${os || "—"}\n🌐 ${browser || "—"}`;
+    tgMsg += `\n\n⏱ На сайте: ${time_on_page || 0} сек`;
+    if (visit_count > 1) tgMsg += `\n🔄 Визитов: ${visit_count}`;
+    if (utm_source) tgMsg += `\n\n📢 UTM: ${utm_source}`;
+    tgMsg += `\n\n📅 ${new Date().toLocaleString("ru-RU", { timeZone: "Asia/Yekaterinburg" })}`;
+
+    // Send to Telegram
+    let tgResult = { success: false };
+    const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+    const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+    if (TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID) {
+      try {
+        const tgResp = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: tgMsg })
+        });
+        const tgData = await tgResp.json();
+        if (tgData.ok) { tgResult = { success: true, message_id: tgData.result.message_id }; console.log("✅ Telegram sent"); }
+        else { console.error("❌ Telegram:", tgData.description); }
+      } catch (e) { console.error("❌ Telegram:", e.message); }
+    } else {
+      console.log("⚠️ Telegram not configured (missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID)");
+    }
+
+    // Send to VK
+    let vkResult = { success: false };
+    const VK_TOKEN = process.env.VK_TOKEN;
+    const VK_USER_ID = process.env.VK_USER_ID;
+    if (VK_TOKEN && VK_USER_ID) {
+      try {
+        const vkBody = new URLSearchParams({ access_token: VK_TOKEN, v: "5.199", user_id: VK_USER_ID, message: tgMsg, random_id: String(Date.now()) });
+        const vkResp = await fetch("https://api.vk.com/method/messages.send", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: vkBody.toString()
+        });
+        const vkData = await vkResp.json();
+        if (vkData.response) { vkResult = { success: true, message_id: vkData.response }; console.log("✅ VK sent"); }
+        else { console.error("❌ VK:", vkData.error?.error_msg); }
+      } catch (e) { console.error("❌ VK:", e.message); }
+    } else {
+      console.log("⚠️ VK not configured (missing VK_TOKEN or VK_USER_ID)");
+    }
+
+    return send(res, 200, {
+      success: true, lead_id,
+      telegram: tgResult.success ? "sent" : "skipped",
+      vk: vkResult.success ? "sent" : "skipped"
+    });
+  }
+
+  // =============================================
+  // Telegram Webhook
+  // =============================================
+  if (routeKey(req.method, pathname) === "POST /api/telegram/webhook") {
+    const body = await readJson(req);
+    console.log("📨 Telegram webhook received:", JSON.stringify(body).slice(0, 200));
+    return send(res, 200, { ok: true });
+  }
+
+  // =============================================
+  // VK Callback
+  // =============================================
+  if (routeKey(req.method, pathname) === "POST /api/vk/callback") {
+    const body = await readJson(req);
+    if (body.type === "confirmation") return res.send("ok");
+    console.log("📨 VK callback received:", JSON.stringify(body).slice(0, 200));
+    return send(res, 200, { ok: true });
   }
 
   sendError(res, 404, "not_found");

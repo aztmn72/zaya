@@ -10,7 +10,7 @@ const dataDir = process.env.ZAYA_DATA_DIR || join(rootDir, "data");
 const dbPath = join(dataDir, "zaya-db.json");
 const port = Number(process.env.PORT || 8787);
 const sessionSecret = process.env.ZAYA_SESSION_SECRET || "zaya-dev-secret-change-before-production";
-const databaseUrl = process.env.DATABASE_URL || "";
+const databaseUrl = (process.env.DATABASE_URL || "").trim();
 let pgPool = null;
 
 const plans = {
@@ -113,6 +113,7 @@ function emptyDb() {
 
 async function getPgPool() {
   if (pgPool) return pgPool;
+  validateDatabaseUrl();
   const { Pool } = await import("pg");
   pgPool = new Pool({
     connectionString: databaseUrl,
@@ -126,6 +127,40 @@ async function getPgPool() {
     )
   `);
   return pgPool;
+}
+
+function validateDatabaseUrl() {
+  if (!databaseUrl) return;
+  let parsed;
+  try {
+    parsed = new URL(databaseUrl);
+  } catch {
+    throw new Error(
+      "DATABASE_URL is invalid. It must look like postgresql://USER:PASSWORD@HOST:PORT/DATABASE"
+    );
+  }
+  if (!["postgres:", "postgresql:"].includes(parsed.protocol) || !parsed.hostname || !parsed.pathname || parsed.pathname === "/") {
+    throw new Error(
+      "DATABASE_URL is invalid. Copy the full Supabase/Postgres URI, not only the password or project name."
+    );
+  }
+}
+
+async function databaseStatus() {
+  if (!databaseUrl) return { configured: false, storage: "json" };
+  try {
+    validateDatabaseUrl();
+    const pool = await getPgPool();
+    await pool.query("select 1");
+    return { configured: true, storage: "postgres", connected: true };
+  } catch (error) {
+    return {
+      configured: true,
+      storage: "postgres",
+      connected: false,
+      error: error.message
+    };
+  }
 }
 
 async function loadPostgresDb() {
@@ -230,14 +265,25 @@ function routeKey(method, pathname) {
 }
 
 async function api(req, res, pathname) {
-  const db = await loadDb();
-
   if (routeKey(req.method, pathname) === "GET /api/health") {
+    const dbStatus = await databaseStatus();
     return send(res, 200, {
       ok: true,
       status: "online",
-      storage: databaseUrl ? "postgres" : "json",
+      database: dbStatus,
       time: nowIso()
+    });
+  }
+
+  let db;
+  try {
+    db = await loadDb();
+  } catch (error) {
+    console.error(error);
+    return send(res, 503, {
+      ok: false,
+      error: "database_unavailable",
+      message: error.message
     });
   }
 

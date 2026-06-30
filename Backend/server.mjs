@@ -530,54 +530,52 @@ async function api(req, res, pathname) {
     db.leads.push(lead);
     await saveDb(db);
 
-    // Respond immediately
+    // Send notifications BEFORE response (Render free tier may kill process after res.end)
+    try {
+      const SEP = "────────────────";
+      let tgMsg = `НОВАЯ ЗАЯВКА\n\n№ ${lead_id}\n\n👤 ${name}\n📱 ${normalizedPhone}\n📧 ${email || "Не указан"}\n\n📋 Интерес:\n${topic || "Не указана"}\n\n💬 Сообщение:\n${message || "Без сообщения"}`;
+      tgMsg += `\n\n${SEP}\n\n📱 ${device_type || "—"}\n💻 ${os || "—"}\n🌐 ${browser || "—"}`;
+      tgMsg += `\n\n⏱ На сайте: ${time_on_page || 0} сек`;
+      if (visit_count > 1) tgMsg += `\n🔄 Визитов: ${visit_count}`;
+      if (utm_source) tgMsg += `\n\n📢 UTM: ${utm_source}`;
+      tgMsg += `\n\n📅 ${new Date().toLocaleString("ru-RU", { timeZone: "Asia/Yekaterinburg" })}`;
+
+      // Telegram
+      const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+      const TG_CHAT = process.env.TELEGRAM_CHAT_ID;
+      console.log(`[TG] send start | token=${TG_TOKEN ? "SET(len=" + TG_TOKEN.length + ")" : "MISSING"} | chatId=${TG_CHAT || "MISSING"}`);
+      if (TG_TOKEN && TG_CHAT) {
+        const r = await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chat_id: TG_CHAT, text: tgMsg })
+        });
+        const d = await r.json();
+        if (d.ok) console.log(`[TG] SUCCESS message_id=${d.result?.message_id}`);
+        else console.error(`[TG] API ERROR:`, JSON.stringify(d));
+      } else { console.log(`[TG] SKIPPED — not configured`); }
+
+      // VK
+      const VK_T = process.env.VK_TOKEN;
+      const VK_U = process.env.VK_USER_ID;
+      let vkUid = VK_U || "";
+      const urlM = vkUid.match(/club(\d+)/);
+      if (urlM) vkUid = "-" + urlM[1];
+      else if (!/^-?\d+$/.test(vkUid)) vkUid = "";
+      console.log(`[VK] send start | token=${VK_T ? "SET(len=" + VK_T.length + ")" : "MISSING"} | userId=${vkUid || "MISSING"}`);
+      if (VK_T && vkUid) {
+        const vkBody = new URLSearchParams({ access_token: VK_T, v: "5.199", user_id: vkUid, message: tgMsg, random_id: String(Date.now()) });
+        const r = await fetch("https://api.vk.com/method/messages.send", {
+          method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: vkBody.toString()
+        });
+        const d = await r.json();
+        if (d.response) console.log(`[VK] SUCCESS message_id=${d.response}`);
+        else console.error(`[VK] API ERROR:`, JSON.stringify(d));
+      } else { console.log(`[VK] SKIPPED — not configured`); }
+    } catch (e) { console.error("[NOTIFY ERROR]", e); }
+
+    // Respond AFTER notifications
     send(res, 200, { success: true, lead_id });
-
-    // Fire-and-forget notifications (does NOT block response)
-    (async () => {
-      try {
-        const SEP = "────────────────";
-        let tgMsg = `НОВАЯ ЗАЯВКА\n\n№ ${lead_id}\n\n👤 ${name}\n📱 ${normalizedPhone}\n📧 ${email || "Не указан"}\n\n📋 Интерес:\n${topic || "Не указана"}\n\n💬 Сообщение:\n${message || "Без сообщения"}`;
-        tgMsg += `\n\n${SEP}\n\n📱 ${device_type || "—"}\n💻 ${os || "—"}\n🌐 ${browser || "—"}`;
-        tgMsg += `\n\n⏱ На сайте: ${time_on_page || 0} сек`;
-        if (visit_count > 1) tgMsg += `\n🔄 Визитов: ${visit_count}`;
-        if (utm_source) tgMsg += `\n\n📢 UTM: ${utm_source}`;
-        tgMsg += `\n\n📅 ${new Date().toLocaleString("ru-RU", { timeZone: "Asia/Yekaterinburg" })}`;
-
-        // Telegram
-        const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-        const TG_CHAT = process.env.TELEGRAM_CHAT_ID;
-        console.log(`[TG] send start | token=${TG_TOKEN ? "SET(len=" + TG_TOKEN.length + ")" : "MISSING"} | chatId=${TG_CHAT || "MISSING"}`);
-        if (TG_TOKEN && TG_CHAT) {
-          const r = await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ chat_id: TG_CHAT, text: tgMsg })
-          });
-          const d = await r.json();
-          if (d.ok) console.log(`[TG] SUCCESS message_id=${d.result?.message_id}`);
-          else console.error(`[TG] API ERROR:`, JSON.stringify(d));
-        } else { console.log(`[TG] SKIPPED — not configured`); }
-
-        // VK
-        const VK_T = process.env.VK_TOKEN;
-        const VK_U = process.env.VK_USER_ID;
-        let vkUid = VK_U || "";
-        const urlM = vkUid.match(/club(\d+)/);
-        if (urlM) vkUid = "-" + urlM[1];
-        else if (!/^-?\d+$/.test(vkUid)) vkUid = "";
-        console.log(`[VK] send start | token=${VK_T ? "SET(len=" + VK_T.length + ")" : "MISSING"} | userId=${vkUid || "MISSING"}`);
-        if (VK_T && vkUid) {
-          const vkBody = new URLSearchParams({ access_token: VK_T, v: "5.199", user_id: vkUid, message: tgMsg, random_id: String(Date.now()) });
-          const r = await fetch("https://api.vk.com/method/messages.send", {
-            method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            body: vkBody.toString()
-          });
-          const d = await r.json();
-          if (d.response) console.log(`[VK] SUCCESS message_id=${d.response}`);
-          else console.error(`[VK] API ERROR:`, JSON.stringify(d));
-        } else { console.log(`[VK] SKIPPED — not configured`); }
-      } catch (e) { console.error("[NOTIFY ERROR]", e); }
-    })();
 
   }
 
